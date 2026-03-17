@@ -6,6 +6,13 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["start_backend.sh"],
       "port": 8000
+    },
+    {
+      "name": "ACI Frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 5173
     }
   ]
 }
