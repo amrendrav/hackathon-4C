@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ACI Backend (FastAPI)",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["start_backend.sh"],
+      "port": 8000
+    }
+  ]
+}
