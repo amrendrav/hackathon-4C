@@ -11,6 +11,26 @@ from __future__ import annotations
 
 import asyncio
 import json
+
+def _parse_json(text: str) -> dict:
+    """Parse JSON from LLM response, handling markdown fences and preamble."""
+    import json as _json, re as _re
+    text = text.strip()
+    # Direct parse
+    try:
+        return _json.loads(text)
+    except Exception:
+        pass
+    # Extract from ```json ... ``` or ``` ... ``` fence
+    m = _re.search(r"```(?:json)?\s*([\s\S]+?)```", text)
+    if m:
+        return _json.loads(m.group(1).strip())
+    # Find first { ... } block
+    m = _re.search(r"\{[\s\S]+\}", text)
+    if m:
+        return _json.loads(m.group(0))
+    raise ValueError(f"No JSON found in response: {text[:200]}")
+
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Optional, TypedDict
@@ -99,13 +119,13 @@ Return ONLY valid JSON with EXACTLY these keys:
 def synthesize(state: ACIState) -> ACIState:
     """Synthesise all 7 agent outputs into the Monday Morning Briefing."""
     agent_outputs = {
-        "category_gap":     state.get("category_gap", {}),
-        "demand_signal":    state.get("demand_signal", {}),
-        "diet_affinity":    state.get("diet_affinity", {}),
-        "promotion_gap":    state.get("promotion_gap", {}),
-        "seasonal_trend":   state.get("seasonal_trend", {}),
-        "low_productivity": state.get("low_productivity", {}),
-        "store_recommender": state.get("store_recommender", {}),
+        "category_gap":     state.get("category_gap") or {},
+        "demand_signal":    state.get("demand_signal") or {},
+        "diet_affinity":    state.get("diet_affinity") or {},
+        "promotion_gap":    state.get("promotion_gap") or {},
+        "seasonal_trend":   state.get("seasonal_trend") or {},
+        "low_productivity": state.get("low_productivity") or {},
+        "store_recommender": state.get("store_recommender") or {},
     }
 
     # Build agent traces for the frontend live panel
@@ -141,7 +161,7 @@ def synthesize(state: ACIState) -> ACIState:
     ])
 
     try:
-        synthesis = json.loads(response.content)
+        synthesis = _parse_json(response.content)
     except Exception:
         synthesis = {
             "overall_score": 72,
@@ -199,14 +219,18 @@ async def run_all_agents_parallel(store_id: int = 36) -> dict:
         ]
         results = await asyncio.gather(*futures, return_exceptions=True)
 
-    # Merge all agent outputs into a single state dict
+    # Merge all agent outputs into a single state dict.
+    # Each agent returns {**initial_state, "agent_key": result} so we must only
+    # update non-None values to avoid agents overwriting each other's results.
     merged: ACIState = initial_state.copy()  # type: ignore[assignment]
     for result in results:
         if isinstance(result, Exception):
             # Log but don't crash — one failing agent shouldn't kill the briefing
             print(f"[orchestrator] Agent error: {result}")
         elif isinstance(result, dict):
-            merged.update(result)
+            for k, v in result.items():
+                if v is not None:
+                    merged[k] = v  # type: ignore[literal-required]
 
     # Run synthesis synchronously (it's fast relative to 7 parallel agents)
     final_state = synthesize(merged)

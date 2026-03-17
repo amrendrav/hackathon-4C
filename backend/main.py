@@ -9,9 +9,22 @@ Run from backend/:
 from dotenv import load_dotenv
 load_dotenv()  # must happen before any agents import Anthropic client
 
+import math
 import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+
+def _sanitize(obj):
+    """Recursively replace nan/inf with None so FastAPI can serialize."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
 
 from agents.orchestrator import run_all_agents_parallel
 from db.queries import (
@@ -109,7 +122,7 @@ def store_recommendations(store_id: int):
 @app.get("/api/low-productivity-skus")
 def low_productivity(bottom_pct: float = 0.25):
     """Bottom-quartile SKUs by category — rationalization candidates."""
-    return {"data": get_low_productivity_skus(bottom_pct=bottom_pct)}
+    return JSONResponse(_sanitize({"data": get_low_productivity_skus(bottom_pct=bottom_pct)}))
 
 
 @app.get("/api/celebration-demand")
