@@ -20,7 +20,8 @@ function AgentPanel({ name }) {
   const [triggered, setTriggered] = useState(false);
   const { data, loading, error, refetch } = useApi(() => getAgent(name, storeId), false);
 
-  const result = data?.result;
+  // Real API shape: { store_id, query, [agent_name]: { ...output } }
+  const result = data?.[name];
 
   return (
     <Card style={{ marginBottom: 16 }}>

@@ -7,6 +7,26 @@ from langchain_anthropic import ChatAnthropic
 from db.queries import get_celebration_demand_by_week
 import json
 
+def _parse_json(text: str) -> dict:
+    """Parse JSON from LLM response, handling markdown fences and preamble."""
+    import json as _json, re as _re
+    text = text.strip()
+    # Direct parse
+    try:
+        return _json.loads(text)
+    except Exception:
+        pass
+    # Extract from ```json ... ``` or ``` ... ``` fence
+    m = _re.search(r"```(?:json)?\s*([\s\S]+?)```", text)
+    if m:
+        return _json.loads(m.group(1).strip())
+    # Find first { ... } block
+    m = _re.search(r"\{[\s\S]+\}", text)
+    if m:
+        return _json.loads(m.group(0))
+    raise ValueError(f"No JSON found in response: {text[:200]}")
+
+
 MODEL = "claude-sonnet-4-5"
 
 SYSTEM_PROMPT = """You are a Seasonal Demand analyst for Albertsons.
@@ -71,7 +91,7 @@ def run_seasonal_trend_agent(state: dict) -> dict:
     celebration = get_celebration_demand_by_week()
     trend_data = _get_google_trends()
 
-    llm = ChatAnthropic(model=MODEL, max_tokens=800)
+    llm = ChatAnthropic(model=MODEL, max_tokens=2000)
     response = llm.invoke([
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -86,7 +106,7 @@ def run_seasonal_trend_agent(state: dict) -> dict:
     ])
 
     try:
-        result = json.loads(response.content)
+        result = _parse_json(response.content)
     except Exception:
         result = {
             "trend_score": 50,

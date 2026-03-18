@@ -7,6 +7,26 @@ from langchain_anthropic import ChatAnthropic
 from db.queries import get_assortment_gaps_by_store, get_network_vs_store_coverage
 import json
 
+def _parse_json(text: str) -> dict:
+    """Parse JSON from LLM response, handling markdown fences and preamble."""
+    import json as _json, re as _re
+    text = text.strip()
+    # Direct parse
+    try:
+        return _json.loads(text)
+    except Exception:
+        pass
+    # Extract from ```json ... ``` or ``` ... ``` fence
+    m = _re.search(r"```(?:json)?\s*([\s\S]+?)```", text)
+    if m:
+        return _json.loads(m.group(1).strip())
+    # Find first { ... } block
+    m = _re.search(r"\{[\s\S]+\}", text)
+    if m:
+        return _json.loads(m.group(0))
+    raise ValueError(f"No JSON found in response: {text[:200]}")
+
+
 MODEL = "claude-sonnet-4-5"
 
 SYSTEM_PROMPT = """You are a Store Assortment Recommender for Albertsons.
@@ -74,7 +94,7 @@ def run_store_recommender_agent(state: dict) -> dict:
     ])
 
     try:
-        result = json.loads(response.content)
+        result = _parse_json(response.content)
     except Exception:
         result = {
             "store_id": store_id,

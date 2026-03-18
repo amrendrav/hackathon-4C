@@ -7,7 +7,11 @@ Run from backend/:
 """
 
 from dotenv import load_dotenv
-load_dotenv()  # must happen before any agents import Anthropic client
+from pathlib import Path
+
+# Resolve .env relative to this file's location — works regardless of cwd
+_env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=_env_path, override=True)  # must run before agents import Anthropic
 
 import math
 import time
